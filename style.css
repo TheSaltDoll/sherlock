@@ -168,7 +168,7 @@ button:hover {
 
 .display-area img {
     width: 100%;           /* Try to fill the container width... */
-    max-width: 900px;      /* ...but stop growing if it gets wider than 900px (keeps text readable) */
+    max-width: 1400px;      /* ...but stop growing if it gets wider than 900px (keeps text readable) */
     height: auto;          /* Let the height grow as long as needed */
     border: 5px solid #fff;
     box-shadow: 0 0 15px rgba(0,0,0,0.8);
