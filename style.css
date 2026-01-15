@@ -183,3 +183,13 @@ button:hover {
     font-size: 1.2em;
     font-style: italic;
 }
+
+.danger-btn {
+    background-color: #8b0000; /* Dark Red */
+    color: #fff;
+    border: 1px solid #ff4444;
+}
+
+.danger-btn:hover {
+    background-color: #ff0000; /* Bright Red */
+}

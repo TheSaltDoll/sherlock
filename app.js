@@ -1,8 +1,9 @@
 // State Variables
 let manifest = {};
-let foundLeads = new Set(); // Stores location codes that worked
+let foundLeads = new Set(); 
 let collectedLetters = new Set();
 let currentCase = "";
+let currentDisplayedImages = []; // New: track what is currently on screen
 
 // DOM Elements
 const caseSelect = document.getElementById('case-select');
@@ -15,6 +16,7 @@ const imageArea = document.getElementById('image-display-area');
 const leadsList = document.getElementById('leads-list');
 const lettersList = document.getElementById('letters-list');
 const leadCount = document.getElementById('lead-count');
+const btnReset = document.getElementById('btn-reset'); // New Button
 
 // Initialize
 async function init() {
@@ -33,6 +35,9 @@ async function init() {
         if (!response.ok) throw new Error("Could not load data.json");
         manifest = await response.json();
         console.log("Manifest loaded:", manifest);
+        
+        // ONLY Load saved state after manifest is ready
+        loadGameState(); 
     } catch (err) {
         setStatus("Error: Run generate_manifest.py to create data.json!", true);
     }
@@ -47,8 +52,18 @@ letterInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAd
 
 caseSelect.addEventListener('change', (e) => {
     currentCase = e.target.value;
-    resetBoard();
-    setStatus(`Selected ${currentCase}. Enter a location.`);
+    // We do NOT reset board here automatically anymore, 
+    // because we might be reloading a saved state.
+    // Instead, we just save the new case selection.
+    setStatus(`Selected ${currentCase}.`);
+    saveGameState();
+});
+
+btnReset.addEventListener('click', () => {
+    if(confirm("Are you sure you want to delete all progress?")) {
+        localStorage.removeItem('detectiveSaveData');
+        location.reload(); // Reload page to clear everything
+    }
 });
 
 // Logic Functions
@@ -62,8 +77,7 @@ function handleSearch() {
     const rawInput = locationInput.value.trim().toUpperCase();
     if (!rawInput) return;
 
-    // Parse Input (Expects Number then Letters, e.g. "237NW")
-    // Regex: Matches digits at start, then letters
+    // Parse Input
     const match = rawInput.match(/^(\d+)([A-Z]+)$/);
     
     if (!match) {
@@ -73,21 +87,13 @@ function handleSearch() {
 
     const numberPart = match[1];
     const lettersPart = match[2];
-
-    // Format target: [two-letters]-[4-digit-number]
-    // e.g., NW-0237
     const paddedNumber = numberPart.padStart(4, '0');
     const searchPrefix = `${lettersPart}-${paddedNumber}`;
 
-    // Search in Manifest
     const caseFiles = manifest[currentCase] || [];
-    
-    // Find all files that start with the searchPrefix
-    // This catches "NW-0237.png", "NW-0237a.png", "NW-0237b.png"
     const matches = caseFiles.filter(filename => filename.startsWith(searchPrefix));
 
     if (matches.length > 0) {
-        // Success
         displayImages(matches);
         setStatus(`Found ${matches.length} file(s) for ${rawInput}.`);
         
@@ -95,22 +101,25 @@ function handleSearch() {
             foundLeads.add(rawInput);
             updateLeadsList();
         }
-        locationInput.value = ""; // Clear input
+        locationInput.value = ""; 
+        saveGameState(); // Save progress
     } else {
-        // Failure
         setStatus("There is no lead at this location.", true);
         imageArea.innerHTML = '<div class="placeholder-text">There is no lead at this location.</div>';
+        currentDisplayedImages = []; // Clear current view tracking
+        saveGameState();
     }
 }
 
 function displayImages(filenames) {
-    imageArea.innerHTML = ""; // Clear current view
+    imageArea.innerHTML = ""; 
+    currentDisplayedImages = filenames; // Track these files for saving
     
     filenames.forEach(file => {
         const img = document.createElement('img');
         img.src = `${currentCase}/${file}`;
         img.alt = file;
-        img.onerror = () => { img.style.display = 'none'; }; // Hide if broken
+        img.onerror = () => { img.style.display = 'none'; }; 
         imageArea.appendChild(img);
     });
 }
@@ -122,6 +131,7 @@ function handleAddLetter() {
             collectedLetters.add(letter);
             updateLettersList();
             setStatus(`Added letter: ${letter}`);
+            saveGameState(); // Save progress
         } else {
             setStatus(`Letter ${letter} already recorded.`);
         }
@@ -139,8 +149,8 @@ function updateLeadsList() {
         const li = document.createElement('li');
         li.textContent = lead;
         li.onclick = () => {
-            locationInput.value = lead; // Put back in box
-            handleSearch(); // Re-trigger search
+            locationInput.value = lead; 
+            handleSearch(); 
         };
         leadsList.appendChild(li);
     });
@@ -148,7 +158,6 @@ function updateLeadsList() {
 
 function updateLettersList() {
     lettersList.innerHTML = "";
-    // Sort alphabetically
     const sorted = Array.from(collectedLetters).sort();
     
     sorted.forEach(char => {
@@ -159,20 +168,51 @@ function updateLettersList() {
     });
 }
 
-function resetBoard() {
-    foundLeads.clear();
-    collectedLetters.clear();
-    updateLeadsList();
-    updateLettersList();
-    imageArea.innerHTML = '<div class="placeholder-text">New case started. Good luck.</div>';
-    locationInput.value = "";
-    letterInput.value = "";
-}
-
 function setStatus(msg, isError = false) {
     statusMsg.textContent = msg;
     statusMsg.style.color = isError ? '#ff6b6b' : 'var(--accent-color)';
     statusMsg.style.borderColor = isError ? '#ff6b6b' : '#444';
+}
+
+// --- SAVE/LOAD SYSTEM ---
+
+function saveGameState() {
+    const state = {
+        case: currentCase,
+        leads: Array.from(foundLeads),      // Convert Set to Array
+        letters: Array.from(collectedLetters), // Convert Set to Array
+        images: currentDisplayedImages      // What is currently on screen
+    };
+    localStorage.setItem('detectiveSaveData', JSON.stringify(state));
+}
+
+function loadGameState() {
+    const savedJSON = localStorage.getItem('detectiveSaveData');
+    if (!savedJSON) return; // No save found, do nothing
+
+    const state = JSON.parse(savedJSON);
+    
+    // Restore variables
+    if (state.case) {
+        currentCase = state.case;
+        caseSelect.value = state.case;
+    }
+    
+    if (state.leads) {
+        foundLeads = new Set(state.leads);
+        updateLeadsList();
+    }
+    
+    if (state.letters) {
+        collectedLetters = new Set(state.letters);
+        updateLettersList();
+    }
+
+    if (state.images && state.images.length > 0) {
+        displayImages(state.images);
+    }
+    
+    setStatus("Previous session restored.");
 }
 
 // Run on load
