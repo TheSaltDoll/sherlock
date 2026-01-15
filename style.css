@@ -193,3 +193,69 @@ button:hover {
 .danger-btn:hover {
     background-color: #ff0000; /* Bright Red */
 }
+
+/* Sidebar Lead Item Styling */
+.lead-item {
+    display: flex;
+    flex-direction: column; /* Stack text on top, badges below */
+    padding: 8px;
+    border-bottom: 1px solid #444;
+    cursor: default;
+}
+
+.lead-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.lead-code {
+    font-weight: bold;
+    color: var(--accent-color);
+    cursor: pointer;
+    flex-grow: 1;
+}
+
+.lead-code:hover {
+    text-decoration: underline;
+}
+
+.add-req-btn {
+    background: transparent;
+    border: 1px solid #666;
+    color: #888;
+    font-size: 0.8em;
+    padding: 0 5px;
+    margin-left: 10px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.add-req-btn:hover {
+    color: #fff;
+    border-color: #fff;
+}
+
+/* The "Required Letter" Badges */
+.req-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.req-badge {
+    background-color: #8b0000; /* Red for "Warning/Stop" */
+    color: white;
+    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid #ff4444;
+}
+
+.req-badge:hover {
+    background-color: #ff4444;
+    text-decoration: line-through; /* visual cue that clicking deletes it */
+}

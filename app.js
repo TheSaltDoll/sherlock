@@ -3,7 +3,8 @@ let manifest = {};
 let foundLeads = new Set(); 
 let collectedLetters = new Set();
 let currentCase = "";
-let currentDisplayedImages = []; // New: track what is currently on screen
+let currentDisplayedImages = []; 
+let leadRequirements = {}; // NEW: Objects { "237NW": ["A", "B"] }
 
 // DOM Elements
 const caseSelect = document.getElementById('case-select');
@@ -16,11 +17,10 @@ const imageArea = document.getElementById('image-display-area');
 const leadsList = document.getElementById('leads-list');
 const lettersList = document.getElementById('letters-list');
 const leadCount = document.getElementById('lead-count');
-const btnReset = document.getElementById('btn-reset'); // New Button
+const btnReset = document.getElementById('btn-reset');
 
 // Initialize
 async function init() {
-    // Populate Case Selector
     for (let i = 1; i <= 10; i++) {
         const opt = document.createElement('option');
         const val = `Case${i.toString().padStart(2, '0')}`;
@@ -29,14 +29,10 @@ async function init() {
         caseSelect.appendChild(opt);
     }
 
-    // Load Manifest
     try {
         const response = await fetch('data.json');
         if (!response.ok) throw new Error("Could not load data.json");
         manifest = await response.json();
-        console.log("Manifest loaded:", manifest);
-        
-        // ONLY Load saved state after manifest is ready
         loadGameState(); 
     } catch (err) {
         setStatus("Error: Run generate_manifest.py to create data.json!", true);
@@ -52,9 +48,6 @@ letterInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAd
 
 caseSelect.addEventListener('change', (e) => {
     currentCase = e.target.value;
-    // We do NOT reset board here automatically anymore, 
-    // because we might be reloading a saved state.
-    // Instead, we just save the new case selection.
     setStatus(`Selected ${currentCase}.`);
     saveGameState();
 });
@@ -62,7 +55,7 @@ caseSelect.addEventListener('change', (e) => {
 btnReset.addEventListener('click', () => {
     if(confirm("Are you sure you want to delete all progress?")) {
         localStorage.removeItem('detectiveSaveData');
-        location.reload(); // Reload page to clear everything
+        location.reload(); 
     }
 });
 
@@ -77,9 +70,7 @@ function handleSearch() {
     const rawInput = locationInput.value.trim().toUpperCase();
     if (!rawInput) return;
 
-    // Parse Input
     const match = rawInput.match(/^(\d+)([A-Z]+)$/);
-    
     if (!match) {
         setStatus("Invalid format. Use Number then Letters (e.g., 237NW).", true);
         return;
@@ -89,6 +80,9 @@ function handleSearch() {
     const lettersPart = match[2];
     const paddedNumber = numberPart.padStart(4, '0');
     const searchPrefix = `${lettersPart}-${paddedNumber}`;
+    
+    // Standardize input for storage (e.g. "237NW")
+    const leadCode = `${numberPart}${lettersPart}`;
 
     const caseFiles = manifest[currentCase] || [];
     const matches = caseFiles.filter(filename => filename.startsWith(searchPrefix));
@@ -97,23 +91,23 @@ function handleSearch() {
         displayImages(matches);
         setStatus(`Found ${matches.length} file(s) for ${rawInput}.`);
         
-        if (!foundLeads.has(rawInput)) {
-            foundLeads.add(rawInput);
-            updateLeadsList();
+        if (!foundLeads.has(leadCode)) {
+            foundLeads.add(leadCode);
+            updateLeadsList(); // Re-draw list
         }
         locationInput.value = ""; 
-        saveGameState(); // Save progress
+        saveGameState(); 
     } else {
         setStatus("There is no lead at this location.", true);
         imageArea.innerHTML = '<div class="placeholder-text">There is no lead at this location.</div>';
-        currentDisplayedImages = []; // Clear current view tracking
+        currentDisplayedImages = []; 
         saveGameState();
     }
 }
 
 function displayImages(filenames) {
     imageArea.innerHTML = ""; 
-    currentDisplayedImages = filenames; // Track these files for saving
+    currentDisplayedImages = filenames; 
     
     filenames.forEach(file => {
         const img = document.createElement('img');
@@ -131,7 +125,7 @@ function handleAddLetter() {
             collectedLetters.add(letter);
             updateLettersList();
             setStatus(`Added letter: ${letter}`);
-            saveGameState(); // Save progress
+            saveGameState(); 
         } else {
             setStatus(`Letter ${letter} already recorded.`);
         }
@@ -141,25 +135,106 @@ function handleAddLetter() {
     }
 }
 
+// --- UPDATED LIST RENDERER ---
 function updateLeadsList() {
     leadCount.textContent = foundLeads.size;
     leadsList.innerHTML = "";
     
-    foundLeads.forEach(lead => {
+    // Sort leads naturally so 2NW comes before 10NW
+    const sortedLeads = Array.from(foundLeads).sort((a, b) => {
+        return parseInt(a) - parseInt(b);
+    });
+
+    sortedLeads.forEach(lead => {
+        // Container
         const li = document.createElement('li');
-        li.textContent = lead;
-        li.onclick = () => {
-            locationInput.value = lead; 
-            handleSearch(); 
+        li.className = "lead-item";
+
+        // Top Row: Lead Name + Add Button
+        const header = document.createElement('div');
+        header.className = "lead-header";
+
+        const spanCode = document.createElement('span');
+        spanCode.className = "lead-code";
+        spanCode.textContent = lead;
+        spanCode.onclick = () => {
+            locationInput.value = lead;
+            handleSearch();
         };
+
+        const addBtn = document.createElement('button');
+        addBtn.className = "add-req-btn";
+        addBtn.textContent = "+ Req";
+        addBtn.title = "Add a letter requirement";
+        addBtn.onclick = (e) => {
+            e.stopPropagation(); // Don't trigger search
+            addRequirement(lead);
+        };
+
+        header.appendChild(spanCode);
+        header.appendChild(addBtn);
+        li.appendChild(header);
+
+        // Bottom Row: Badges
+        if (leadRequirements[lead] && leadRequirements[lead].length > 0) {
+            const reqContainer = document.createElement('div');
+            reqContainer.className = "req-container";
+
+            leadRequirements[lead].forEach(reqLetter => {
+                const badge = document.createElement('span');
+                badge.className = "req-badge";
+                badge.textContent = `Need: ${reqLetter}`;
+                badge.title = "Click to mark as resolved";
+                badge.onclick = (e) => {
+                    e.stopPropagation();
+                    removeRequirement(lead, reqLetter);
+                };
+                reqContainer.appendChild(badge);
+            });
+            li.appendChild(reqContainer);
+        }
+
         leadsList.appendChild(li);
     });
+}
+
+// --- NEW REQUIREMENT LOGIC ---
+
+function addRequirement(lead) {
+    const letter = prompt(`What letter is required for ${lead}? (Enter A-Z)`);
+    if (!letter) return;
+
+    const cleanLetter = letter.trim().toUpperCase();
+    if (!/^[A-Z]$/.test(cleanLetter)) {
+        alert("Please enter a single letter.");
+        return;
+    }
+
+    if (!leadRequirements[lead]) {
+        leadRequirements[lead] = [];
+    }
+
+    if (!leadRequirements[lead].includes(cleanLetter)) {
+        leadRequirements[lead].push(cleanLetter);
+        leadRequirements[lead].sort();
+        updateLeadsList(); // Refresh display
+        saveGameState();
+    }
+}
+
+function removeRequirement(lead, letterToRemove) {
+    if (!leadRequirements[lead]) return;
+
+    if (confirm(`Remove requirement for Letter ${letterToRemove}?`)) {
+        leadRequirements[lead] = leadRequirements[lead].filter(l => l !== letterToRemove);
+        updateLeadsList(); // Refresh display
+        saveGameState();
+    }
 }
 
 function updateLettersList() {
     lettersList.innerHTML = "";
     const sorted = Array.from(collectedLetters).sort();
-    
     sorted.forEach(char => {
         const badge = document.createElement('div');
         badge.className = 'letter-badge';
@@ -174,46 +249,39 @@ function setStatus(msg, isError = false) {
     statusMsg.style.borderColor = isError ? '#ff6b6b' : '#444';
 }
 
-// --- SAVE/LOAD SYSTEM ---
-
 function saveGameState() {
     const state = {
         case: currentCase,
-        leads: Array.from(foundLeads),      // Convert Set to Array
-        letters: Array.from(collectedLetters), // Convert Set to Array
-        images: currentDisplayedImages      // What is currently on screen
+        leads: Array.from(foundLeads),
+        letters: Array.from(collectedLetters),
+        images: currentDisplayedImages,
+        reqs: leadRequirements // NEW: Save requirements
     };
     localStorage.setItem('detectiveSaveData', JSON.stringify(state));
 }
 
 function loadGameState() {
     const savedJSON = localStorage.getItem('detectiveSaveData');
-    if (!savedJSON) return; // No save found, do nothing
+    if (!savedJSON) return; 
 
     const state = JSON.parse(savedJSON);
     
-    // Restore variables
     if (state.case) {
         currentCase = state.case;
         caseSelect.value = state.case;
     }
     
-    if (state.leads) {
-        foundLeads = new Set(state.leads);
-        updateLeadsList();
-    }
-    
-    if (state.letters) {
-        collectedLetters = new Set(state.letters);
-        updateLettersList();
-    }
+    if (state.leads) foundLeads = new Set(state.leads);
+    if (state.letters) collectedLetters = new Set(state.letters);
+    if (state.reqs) leadRequirements = state.reqs; // NEW: Load requirements
 
     if (state.images && state.images.length > 0) {
         displayImages(state.images);
     }
     
+    updateLeadsList(); // Refresh sidebar to show loaded reqs
+    updateLettersList();
     setStatus("Previous session restored.");
 }
 
-// Run on load
 init();
