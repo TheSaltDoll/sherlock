@@ -95,12 +95,11 @@ textarea#notebook {
     resize: none; padding: 10px; font-family: inherit;
 }
 
-/* --- MAIN CONTENT (CSS GRID FIX) --- */
+/* --- MAIN CONTENT (CSS GRID) --- */
 .main-content {
     flex-grow: 1; /* Fill remaining width next to sidebar */
     height: 100%; /* Force full height */
     
-    /* THE FIX: Switch from Flexbox to Grid for vertical layout */
     display: grid;
     grid-template-rows: auto 1fr; /* Row 1: Fits content. Row 2: Takes ALL remaining space. */
     
@@ -114,7 +113,6 @@ textarea#notebook {
     border-bottom: 1px solid var(--border-color);
     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     z-index: 10;
-    /* No height/flex needed here, Grid handles it via "auto" */
 }
 
 .control-row { display: flex; gap: 20px; margin-bottom: 15px; align-items: flex-end; }
@@ -135,8 +133,9 @@ button:hover { background: #e5b742; }
 
 /* Row 2: Display Area */
 .display-area {
-    /* No flex properties needed anymore! Grid handles the size. */
     overflow-y: auto; /* Scroll if content is big */
+    min-height: 0;    /* CRITICAL FIX: Allows this area to shrink below the image height */
+    
     padding: 30px;
     background-color: #151515;
     text-align: center;
@@ -152,8 +151,6 @@ button:hover { background: #e5b742; }
     margin-bottom: 30px;
     display: block;
     margin-left: auto; margin-right: auto;
-    
-    /* If you dislike the magnifying glass, delete the line below */
     cursor: zoom-in; 
 }
 
