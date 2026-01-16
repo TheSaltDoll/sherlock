@@ -93,6 +93,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    overflow: hidden;
 }
 
 /* Top Controls */
@@ -164,6 +165,7 @@ button:hover {
     overflow-y: auto;
     background-color: #151515;
     text-align: center;
+    min-height: 0;
 }
 
 .display-area img {
