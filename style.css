@@ -161,7 +161,6 @@ button:hover {
 /* Bottom Display Area */
 .display-area {
     flex-grow: 1;
-    height: 0;
     min-height: 0;
     padding: 30px;
     overflow-y: auto;
