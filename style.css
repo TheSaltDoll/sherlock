@@ -162,6 +162,7 @@ button:hover {
 
 /* Bottom Display Area */
 .display-area {
+    display:flex;
     flex: 1;
     min-height: 0;
     padding: 30px;
