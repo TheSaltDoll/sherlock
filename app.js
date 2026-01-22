@@ -21,7 +21,6 @@ const btnReset = document.getElementById('btn-reset');
 
 // Initialize
 async function init() {
-    // Generate Case Options 01-10
     for (let i = 1; i <= 10; i++) {
         const opt = document.createElement('option');
         const val = `Case${i.toString().padStart(2, '0')}`;
@@ -30,7 +29,6 @@ async function init() {
         caseSelect.appendChild(opt);
     }
 
-    // Load Data
     try {
         const response = await fetch('data.json');
         if (!response.ok) throw new Error("Could not load data.json");
@@ -73,7 +71,7 @@ function handleSearch() {
     const rawInput = locationInput.value.trim().toUpperCase();
     if (!rawInput) return;
 
-    // Parse Input: e.g. "237NW" -> digits=237, letters=NW
+    // Parse Input
     const match = rawInput.match(/^(\d+)([A-Z]+)$/);
     if (!match) {
         setStatus("Invalid format. Use Number then Letters (e.g., 237NW).", true);
@@ -82,27 +80,34 @@ function handleSearch() {
 
     const numberPart = match[1];
     const lettersPart = match[2];
-    const paddedNumber = numberPart.padStart(4, '0'); // "0237"
+    const paddedNumber = numberPart.padStart(4, '0');
     
-    // Construct the search prefix: "NW-0237"
+    // Prefix: "NW-0237"
     const searchPrefix = `${lettersPart}-${paddedNumber}`;
-    const leadCode = `${numberPart}${lettersPart}`; // "237NW" (for display)
+    const leadCode = `${numberPart}${lettersPart}`;
 
     const caseFiles = manifest[currentCase] || [];
 
-    // Filter Logic: Partial match prevention + Lowercase matching
+    // --- FIX: Improved Filtering Logic ---
     const matches = caseFiles.filter(filename => {
         const lowerName = filename.toLowerCase();
         const lowerPrefix = searchPrefix.toLowerCase();
 
+        // 1. Must start with the prefix (e.g. "nw-0042")
         if (!lowerName.startsWith(lowerPrefix)) return false;
 
-        // Ensure we matched the full number (e.g. avoid matching "02375")
-        // The character after the prefix must be a separator or end of string
+        // 2. Prevent Partial Number Matches (e.g. searching "42" shouldn't find "425")
+        // We check the character immediately following our search term.
         const charAfter = lowerName.charAt(lowerPrefix.length);
-        const validTerminators = ['.', '_', '-']; 
-        
-        return validTerminators.includes(charAfter);
+
+        // If the next character is a DIGIT, it's a false match (e.g. 0042 vs 00425)
+        if (charAfter >= '0' && charAfter <= '9') {
+            return false;
+        }
+
+        // If it's NOT a digit, it is valid! 
+        // This accepts: "a" (nw-0042a), "." (nw-0042.png), "_" (nw-0042_req...)
+        return true;
     });
 
     if (matches.length > 0) {
@@ -128,13 +133,13 @@ function displayImages(filenames) {
     currentDisplayedImages = filenames; 
     
     filenames.forEach(file => {
-        // --- CHANGED: Strict check for "_req_" only ---
+        // Strict check for "_req_" to identify buttons
         const isGated = /_req_/i.test(file);
 
         if (isGated) {
             createGatedContent(file);
         } else {
-            // Normal Image
+            // Normal Image (includes 'a', 'b', 'c' files)
             const img = document.createElement('img');
             img.src = `${currentCase}/${file}`;
             img.alt = file;
@@ -144,29 +149,24 @@ function displayImages(filenames) {
 }
 
 function createGatedContent(filename) {
-    // --- CHANGED: Regex looks STRICTLY for "_req_" ---
-    // Matches: "_req_" followed by the rule string, until the dot
+    // Regex matches "_req_" followed by the rule string
     const match = filename.match(/_req_(.+?)\./i); 
     if (!match) return; 
     
-    const ruleString = match[1]; // Capture Group 1 is now the rule
+    const ruleString = match[1]; 
     
-    // Create Container
     const container = document.createElement('div');
     container.className = "gated-container";
     
-    // Create Button
     const btn = document.createElement('button');
     btn.className = "gate-btn";
     
-    // Format label
     const readableRule = ruleString.replace(/-/g, ' '); 
     btn.textContent = `Open Clue (Requires: ${readableRule})`;
 
-    // Button Click Logic
     btn.onclick = () => {
         if (checkRequirement(ruleString)) {
-            container.innerHTML = ""; // Remove button
+            container.innerHTML = ""; 
             
             const img = document.createElement('img');
             img.src = `${currentCase}/${filename}`;
@@ -183,22 +183,18 @@ function createGatedContent(filename) {
 }
 
 function checkRequirement(ruleString) {
-    // Normalize to uppercase
     const rule = ruleString.toUpperCase();
 
-    // 1. OR Logic
     if (rule.includes('-OR-') || rule.includes(' OR ')) {
         const parts = rule.split(/-OR-| OR /);
         return parts.some(letter => collectedLetters.has(letter.trim()));
     }
     
-    // 2. AND Logic
     if (rule.includes('-AND-') || rule.includes(' AND ')) {
         const parts = rule.split(/-AND-| AND /);
         return parts.every(letter => collectedLetters.has(letter.trim()));
     }
     
-    // 3. Single Letter
     return collectedLetters.has(rule);
 }
 
