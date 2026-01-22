@@ -155,3 +155,53 @@ button:hover { background: #e5b742; }
 
 .placeholder-text { color: #555; margin-top: 50px; font-size: 1.2em; font-style: italic; }
 
+/* --- GATED CONTENT --- */
+.gated-container {
+    margin-bottom: 30px;
+    border: 1px dashed #444;
+    padding: 20px;
+    background: rgba(0,0,0,0.2);
+}
+
+.gate-btn {
+    background: #333;
+    color: var(--accent-color);
+    border: 2px solid var(--accent-color);
+    padding: 15px 30px;
+    font-size: 1.1em;
+    font-family: inherit;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: 0.2s;
+    width: 100%;
+    max-width: 500px;
+}
+
+.gate-btn:hover {
+    background: var(--accent-color);
+    color: #1a1a1a;
+    box-shadow: 0 0 15px var(--accent-color);
+}
+
+.gate-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: #555;
+    color: #555;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Animation for revealing the image */
+.revealed-img {
+    animation: fadeIn 0.5s ease-in;
+    margin-top: 20px !important;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+

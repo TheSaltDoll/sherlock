@@ -4,7 +4,7 @@ let foundLeads = new Set();
 let collectedLetters = new Set();
 let currentCase = "";
 let currentDisplayedImages = []; 
-let leadRequirements = {}; // NEW: Objects { "237NW": ["A", "B"] }
+let leadRequirements = {}; 
 
 // DOM Elements
 const caseSelect = document.getElementById('case-select');
@@ -81,7 +81,6 @@ function handleSearch() {
     const paddedNumber = numberPart.padStart(4, '0');
     const searchPrefix = `${lettersPart}-${paddedNumber}`;
     
-    // Standardize input for storage (e.g. "237NW")
     const leadCode = `${numberPart}${lettersPart}`;
 
     const caseFiles = manifest[currentCase] || [];
@@ -93,7 +92,7 @@ function handleSearch() {
         
         if (!foundLeads.has(leadCode)) {
             foundLeads.add(leadCode);
-            updateLeadsList(); // Re-draw list
+            updateLeadsList(); 
         }
         locationInput.value = ""; 
         saveGameState(); 
@@ -105,17 +104,85 @@ function handleSearch() {
     }
 }
 
+// --- UPDATED IMAGE DISPLAY LOGIC ---
 function displayImages(filenames) {
     imageArea.innerHTML = ""; 
     currentDisplayedImages = filenames; 
     
     filenames.forEach(file => {
-        const img = document.createElement('img');
-        img.src = `${currentCase}/${file}`;
-        img.alt = file;
-        img.onerror = () => { img.style.display = 'none'; }; 
-        imageArea.appendChild(img);
+        // Check for Gatekeeper Tag: "_req_"
+        if (file.includes('_req_')) {
+            createGatedContent(file);
+        } else {
+            // Normal Image
+            const img = document.createElement('img');
+            img.src = `${currentCase}/${file}`;
+            img.alt = file;
+            imageArea.appendChild(img);
+        }
     });
+}
+
+function createGatedContent(filename) {
+    // 1. Parse filename: "NW-0237_req_A-OR-B.png" -> "A-OR-B"
+    // Use regex to capture text between "_req_" and the file extension
+    const match = filename.match(/_req_(.+?)\./); 
+    if (!match) return; // Fail safe
+    
+    const ruleString = match[1]; // e.g., "A", "A-OR-B", "A-AND-B"
+    
+    // 2. Create Container
+    const container = document.createElement('div');
+    container.className = "gated-container";
+    
+    // 3. Create Button
+    const btn = document.createElement('button');
+    btn.className = "gate-btn";
+    
+    // Format label: Replace dashes with spaces for readability
+    const readableRule = ruleString.replace(/-/g, ' '); 
+    btn.textContent = `Open Clue (Requires: ${readableRule})`;
+
+    // 4. Button Logic
+    btn.onclick = () => {
+        if (checkRequirement(ruleString)) {
+            // Success: Remove button, show image
+            container.innerHTML = ""; // clear button
+            
+            const img = document.createElement('img');
+            img.src = `${currentCase}/${filename}`;
+            img.className = "revealed-img"; // Adds animation
+            
+            container.appendChild(img);
+            // We append the container back to imageArea? 
+            // No, container is ALREADY in imageArea. We just updated its content.
+        } else {
+            // Failure
+            alert(`You do not have the required evidence: ${readableRule}`);
+        }
+    };
+
+    container.appendChild(btn);
+    imageArea.appendChild(container);
+}
+
+function checkRequirement(ruleString) {
+    // 1. OR Logic (A-OR-B)
+    if (ruleString.includes('-OR-')) {
+        const parts = ruleString.split('-OR-');
+        // Returns true if User has AT LEAST ONE of the letters
+        return parts.some(letter => collectedLetters.has(letter));
+    }
+    
+    // 2. AND Logic (A-AND-B)
+    if (ruleString.includes('-AND-')) {
+        const parts = ruleString.split('-AND-');
+        // Returns true ONLY if User has ALL letters
+        return parts.every(letter => collectedLetters.has(letter));
+    }
+    
+    // 3. Single Letter (A)
+    return collectedLetters.has(ruleString);
 }
 
 function handleAddLetter() {
@@ -135,22 +202,18 @@ function handleAddLetter() {
     }
 }
 
-// --- UPDATED LIST RENDERER ---
 function updateLeadsList() {
     leadCount.textContent = foundLeads.size;
     leadsList.innerHTML = "";
     
-    // Sort leads naturally so 2NW comes before 10NW
     const sortedLeads = Array.from(foundLeads).sort((a, b) => {
         return parseInt(a) - parseInt(b);
     });
 
     sortedLeads.forEach(lead => {
-        // Container
         const li = document.createElement('li');
         li.className = "lead-item";
 
-        // Top Row: Lead Name + Add Button
         const header = document.createElement('div');
         header.className = "lead-header";
 
@@ -167,7 +230,7 @@ function updateLeadsList() {
         addBtn.textContent = "+ Req";
         addBtn.title = "Add a letter requirement";
         addBtn.onclick = (e) => {
-            e.stopPropagation(); // Don't trigger search
+            e.stopPropagation(); 
             addRequirement(lead);
         };
 
@@ -175,7 +238,6 @@ function updateLeadsList() {
         header.appendChild(addBtn);
         li.appendChild(header);
 
-        // Bottom Row: Badges
         if (leadRequirements[lead] && leadRequirements[lead].length > 0) {
             const reqContainer = document.createElement('div');
             reqContainer.className = "req-container";
@@ -198,8 +260,6 @@ function updateLeadsList() {
     });
 }
 
-// --- NEW REQUIREMENT LOGIC ---
-
 function addRequirement(lead) {
     const letter = prompt(`What letter is required for ${lead}? (Enter A-Z)`);
     if (!letter) return;
@@ -217,7 +277,7 @@ function addRequirement(lead) {
     if (!leadRequirements[lead].includes(cleanLetter)) {
         leadRequirements[lead].push(cleanLetter);
         leadRequirements[lead].sort();
-        updateLeadsList(); // Refresh display
+        updateLeadsList(); 
         saveGameState();
     }
 }
@@ -227,7 +287,7 @@ function removeRequirement(lead, letterToRemove) {
 
     if (confirm(`Remove requirement for Letter ${letterToRemove}?`)) {
         leadRequirements[lead] = leadRequirements[lead].filter(l => l !== letterToRemove);
-        updateLeadsList(); // Refresh display
+        updateLeadsList(); 
         saveGameState();
     }
 }
@@ -255,7 +315,7 @@ function saveGameState() {
         leads: Array.from(foundLeads),
         letters: Array.from(collectedLetters),
         images: currentDisplayedImages,
-        reqs: leadRequirements // NEW: Save requirements
+        reqs: leadRequirements 
     };
     localStorage.setItem('detectiveSaveData', JSON.stringify(state));
 }
@@ -273,13 +333,13 @@ function loadGameState() {
     
     if (state.leads) foundLeads = new Set(state.leads);
     if (state.letters) collectedLetters = new Set(state.letters);
-    if (state.reqs) leadRequirements = state.reqs; // NEW: Load requirements
+    if (state.reqs) leadRequirements = state.reqs; 
 
     if (state.images && state.images.length > 0) {
         displayImages(state.images);
     }
     
-    updateLeadsList(); // Refresh sidebar to show loaded reqs
+    updateLeadsList(); 
     updateLettersList();
     setStatus("Previous session restored.");
 }

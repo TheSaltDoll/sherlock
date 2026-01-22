@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detective Companion</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3>Evidence Letters</h3>
+                <div id="letters-list" class="letters-grid">
+                    </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Leads (<span id="lead-count">0</span>)</h3>
+                <ul id="leads-list">
+                    </ul>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            
+            <div class="controls-area">
+                <div class="control-row">
+                    <div class="input-group">
+                        <label>Current Case</label>
+                        <select id="case-select">
+                            <option value="" disabled selected>Select Case</option>
+                            </select>
+                    <div id="status-message" class="status-bar">Ready to investigate.</div>
+                    </div> <div class="input-group" style="margin-left: auto;"> 
+                        <label>&nbsp;</label> 
+                        <button id="btn-reset" class="danger-btn">Reset Game</button>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <div class="input-group">
+                        <label>Location (e.g., 237NW)</label>
+                        <div class="action-input">
+                            <input type="text" id="location-input" placeholder="Enter code..." autocomplete="off">
+                            <button id="btn-search">Investigate</button>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Found Letter</label>
+                        <div class="action-input">
+                            <input type="text" id="letter-input" placeholder="A-Z" maxlength="1" autocomplete="off">
+                            <button id="btn-add-letter">Add</button>
+                        </div>
+                    </div>
+                </div>
+                
+                
+            </div>
+
+            <div id="image-display-area" class="display-area">
+                <div class="placeholder-text">Select a case and enter a location to begin.</div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
