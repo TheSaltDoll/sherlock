@@ -21,6 +21,7 @@ const btnReset = document.getElementById('btn-reset');
 
 // Initialize
 async function init() {
+    // Generate Case Options 01-10
     for (let i = 1; i <= 10; i++) {
         const opt = document.createElement('option');
         const val = `Case${i.toString().padStart(2, '0')}`;
@@ -29,10 +30,12 @@ async function init() {
         caseSelect.appendChild(opt);
     }
 
+    // Load Data
     try {
         const response = await fetch('data.json');
         if (!response.ok) throw new Error("Could not load data.json");
         manifest = await response.json();
+        console.log("Manifest loaded successfully.");
         loadGameState(); 
     } catch (err) {
         setStatus("Error: Run generate_manifest.py to create data.json!", true);
@@ -59,7 +62,7 @@ btnReset.addEventListener('click', () => {
     }
 });
 
-// Logic Functions
+// --- LOGIC FUNCTIONS ---
 
 function handleSearch() {
     if (!currentCase) {
@@ -70,6 +73,7 @@ function handleSearch() {
     const rawInput = locationInput.value.trim().toUpperCase();
     if (!rawInput) return;
 
+    // Parse Input: e.g. "237NW" -> digits=237, letters=NW
     const match = rawInput.match(/^(\d+)([A-Z]+)$/);
     if (!match) {
         setStatus("Invalid format. Use Number then Letters (e.g., 237NW).", true);
@@ -78,13 +82,28 @@ function handleSearch() {
 
     const numberPart = match[1];
     const lettersPart = match[2];
-    const paddedNumber = numberPart.padStart(4, '0');
-    const searchPrefix = `${lettersPart}-${paddedNumber}`;
+    const paddedNumber = numberPart.padStart(4, '0'); // "0237"
     
-    const leadCode = `${numberPart}${lettersPart}`;
+    // Construct the search prefix: "NW-0237"
+    const searchPrefix = `${lettersPart}-${paddedNumber}`;
+    const leadCode = `${numberPart}${lettersPart}`; // "237NW" (for display)
 
     const caseFiles = manifest[currentCase] || [];
-    const matches = caseFiles.filter(filename => filename.startsWith(searchPrefix));
+
+    // Filter Logic: Partial match prevention + Lowercase matching
+    const matches = caseFiles.filter(filename => {
+        const lowerName = filename.toLowerCase();
+        const lowerPrefix = searchPrefix.toLowerCase();
+
+        if (!lowerName.startsWith(lowerPrefix)) return false;
+
+        // Ensure we matched the full number (e.g. avoid matching "02375")
+        // The character after the prefix must be a separator or end of string
+        const charAfter = lowerName.charAt(lowerPrefix.length);
+        const validTerminators = ['.', '_', '-']; 
+        
+        return validTerminators.includes(charAfter);
+    });
 
     if (matches.length > 0) {
         displayImages(matches);
@@ -104,14 +123,15 @@ function handleSearch() {
     }
 }
 
-// --- UPDATED IMAGE DISPLAY LOGIC ---
 function displayImages(filenames) {
     imageArea.innerHTML = ""; 
     currentDisplayedImages = filenames; 
     
     filenames.forEach(file => {
-        // Check for Gatekeeper Tag: "_req_"
-        if (file.includes('_req_')) {
+        // --- CHANGED: Strict check for "_req_" only ---
+        const isGated = /_req_/i.test(file);
+
+        if (isGated) {
             createGatedContent(file);
         } else {
             // Normal Image
@@ -124,40 +144,36 @@ function displayImages(filenames) {
 }
 
 function createGatedContent(filename) {
-    // 1. Parse filename: "NW-0237_req_A-OR-B.png" -> "A-OR-B"
-    // Use regex to capture text between "_req_" and the file extension
-    const match = filename.match(/_req_(.+?)\./); 
-    if (!match) return; // Fail safe
+    // --- CHANGED: Regex looks STRICTLY for "_req_" ---
+    // Matches: "_req_" followed by the rule string, until the dot
+    const match = filename.match(/_req_(.+?)\./i); 
+    if (!match) return; 
     
-    const ruleString = match[1]; // e.g., "A", "A-OR-B", "A-AND-B"
+    const ruleString = match[1]; // Capture Group 1 is now the rule
     
-    // 2. Create Container
+    // Create Container
     const container = document.createElement('div');
     container.className = "gated-container";
     
-    // 3. Create Button
+    // Create Button
     const btn = document.createElement('button');
     btn.className = "gate-btn";
     
-    // Format label: Replace dashes with spaces for readability
+    // Format label
     const readableRule = ruleString.replace(/-/g, ' '); 
     btn.textContent = `Open Clue (Requires: ${readableRule})`;
 
-    // 4. Button Logic
+    // Button Click Logic
     btn.onclick = () => {
         if (checkRequirement(ruleString)) {
-            // Success: Remove button, show image
-            container.innerHTML = ""; // clear button
+            container.innerHTML = ""; // Remove button
             
             const img = document.createElement('img');
             img.src = `${currentCase}/${filename}`;
-            img.className = "revealed-img"; // Adds animation
+            img.className = "revealed-img"; 
             
             container.appendChild(img);
-            // We append the container back to imageArea? 
-            // No, container is ALREADY in imageArea. We just updated its content.
         } else {
-            // Failure
             alert(`You do not have the required evidence: ${readableRule}`);
         }
     };
@@ -167,23 +183,26 @@ function createGatedContent(filename) {
 }
 
 function checkRequirement(ruleString) {
-    // 1. OR Logic (A-OR-B)
-    if (ruleString.includes('-OR-')) {
-        const parts = ruleString.split('-OR-');
-        // Returns true if User has AT LEAST ONE of the letters
-        return parts.some(letter => collectedLetters.has(letter));
+    // Normalize to uppercase
+    const rule = ruleString.toUpperCase();
+
+    // 1. OR Logic
+    if (rule.includes('-OR-') || rule.includes(' OR ')) {
+        const parts = rule.split(/-OR-| OR /);
+        return parts.some(letter => collectedLetters.has(letter.trim()));
     }
     
-    // 2. AND Logic (A-AND-B)
-    if (ruleString.includes('-AND-')) {
-        const parts = ruleString.split('-AND-');
-        // Returns true ONLY if User has ALL letters
-        return parts.every(letter => collectedLetters.has(letter));
+    // 2. AND Logic
+    if (rule.includes('-AND-') || rule.includes(' AND ')) {
+        const parts = rule.split(/-AND-| AND /);
+        return parts.every(letter => collectedLetters.has(letter.trim()));
     }
     
-    // 3. Single Letter (A)
-    return collectedLetters.has(ruleString);
+    // 3. Single Letter
+    return collectedLetters.has(rule);
 }
+
+// --- STANDARD FUNCTIONS ---
 
 function handleAddLetter() {
     const letter = letterInput.value.trim().toUpperCase();
@@ -246,7 +265,6 @@ function updateLeadsList() {
                 const badge = document.createElement('span');
                 badge.className = "req-badge";
                 badge.textContent = `Need: ${reqLetter}`;
-                badge.title = "Click to mark as resolved";
                 badge.onclick = (e) => {
                     e.stopPropagation();
                     removeRequirement(lead, reqLetter);
@@ -273,7 +291,6 @@ function addRequirement(lead) {
     if (!leadRequirements[lead]) {
         leadRequirements[lead] = [];
     }
-
     if (!leadRequirements[lead].includes(cleanLetter)) {
         leadRequirements[lead].push(cleanLetter);
         leadRequirements[lead].sort();
@@ -284,7 +301,6 @@ function addRequirement(lead) {
 
 function removeRequirement(lead, letterToRemove) {
     if (!leadRequirements[lead]) return;
-
     if (confirm(`Remove requirement for Letter ${letterToRemove}?`)) {
         leadRequirements[lead] = leadRequirements[lead].filter(l => l !== letterToRemove);
         updateLeadsList(); 
@@ -330,7 +346,6 @@ function loadGameState() {
         currentCase = state.case;
         caseSelect.value = state.case;
     }
-    
     if (state.leads) foundLeads = new Set(state.leads);
     if (state.letters) collectedLetters = new Set(state.letters);
     if (state.reqs) leadRequirements = state.reqs; 
