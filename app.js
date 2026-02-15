@@ -1,6 +1,7 @@
 // State Variables
 let manifest = {};
 let foundLeads = new Set(); 
+let failedVisits = new Set();
 let collectedLetters = new Set();
 let currentCase = "";
 let currentDisplayedImages = []; 
@@ -17,6 +18,7 @@ const imageArea = document.getElementById('image-display-area');
 const leadsList = document.getElementById('leads-list');
 const lettersList = document.getElementById('letters-list');
 const leadCount = document.getElementById('lead-count');
+const failCount = document.getElementById('fail-count');
 const btnReset = document.getElementById('btn-reset');
 
 // Initialize
@@ -124,6 +126,10 @@ function handleSearch() {
         setStatus("There is no lead at this location.", true);
         imageArea.innerHTML = '<div class="placeholder-text">There is no lead at this location.</div>';
         currentDisplayedImages = []; 
+        if (!failedVisits.has(leadCode)) {
+            failedVisits.add(leadCode);
+            updateFailCount();
+        }
         saveGameState();
     }
 }
@@ -304,6 +310,10 @@ function removeRequirement(lead, letterToRemove) {
     }
 }
 
+function updateFailCount() {
+    failCount.textContent = failedVisits.size;
+}
+
 function updateLettersList() {
     lettersList.innerHTML = "";
     const sorted = Array.from(collectedLetters).sort();
@@ -311,6 +321,16 @@ function updateLettersList() {
         const badge = document.createElement('div');
         badge.className = 'letter-badge';
         badge.textContent = char;
+        badge.title = 'Click to remove';
+        badge.style.cursor = 'pointer';
+        badge.onclick = () => {
+            if (confirm(`Remove letter ${char}?`)) {
+                collectedLetters.delete(char);
+                updateLettersList();
+                setStatus(`Removed letter: ${char}`);
+                saveGameState();
+            }
+        };
         lettersList.appendChild(badge);
     });
 }
@@ -327,7 +347,8 @@ function saveGameState() {
         leads: Array.from(foundLeads),
         letters: Array.from(collectedLetters),
         images: currentDisplayedImages,
-        reqs: leadRequirements 
+        reqs: leadRequirements,
+        fails: Array.from(failedVisits)
     };
     localStorage.setItem('detectiveSaveData', JSON.stringify(state));
 }
@@ -345,6 +366,7 @@ function loadGameState() {
     if (state.leads) foundLeads = new Set(state.leads);
     if (state.letters) collectedLetters = new Set(state.letters);
     if (state.reqs) leadRequirements = state.reqs; 
+    if (state.fails) failedVisits = new Set(state.fails);
 
     if (state.images && state.images.length > 0) {
         displayImages(state.images);
@@ -352,6 +374,7 @@ function loadGameState() {
     
     updateLeadsList(); 
     updateLettersList();
+    updateFailCount();
     setStatus("Previous session restored.");
 }
 

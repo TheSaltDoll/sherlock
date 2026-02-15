@@ -58,6 +58,11 @@ html, body {
     width: 25px; height: 25px;
     display: flex; align-items: center; justify-content: center;
     border-radius: 3px;
+    transition: 0.2s;
+}
+.letter-badge:hover {
+    background: #8b0000;
+    color: #fff;
 }
 
 /* Leads List */
