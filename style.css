@@ -64,6 +64,18 @@ html, body {
     background: #8b0000;
     color: #fff;
 }
+.letter-removed {
+    background: #444;
+    color: #777;
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+.letter-removed:hover {
+    background: var(--accent-color);
+    color: #000;
+    text-decoration: none;
+    opacity: 1;
+}
 
 /* Leads List */
 #leads-list { list-style: none; padding: 0; }

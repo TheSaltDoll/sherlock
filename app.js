@@ -2,7 +2,9 @@
 let manifest = {};
 let foundLeads = new Set(); 
 let failedVisits = new Set();
+let revealedMore = new Set();
 let collectedLetters = new Set();
+let removedLetters = new Set();
 let currentCase = "";
 let currentDisplayedImages = []; 
 let leadRequirements = {}; 
@@ -73,15 +75,23 @@ function handleSearch() {
     const rawInput = locationInput.value.trim().toUpperCase();
     if (!rawInput) return;
 
-    // Parse Input
-    const match = rawInput.match(/^(\d+)([A-Z]+)$/);
-    if (!match) {
-        setStatus("Invalid format. Use Number then Letters (e.g., 237NW).", true);
+    // Parse Input — support both "237NW" (number+letters) and "A1" (letters+number)
+    let numberPart, lettersPart;
+    
+    const matchNumFirst = rawInput.match(/^(\d+)([A-Z]+)$/);
+    const matchLetFirst = rawInput.match(/^([A-Z]+)(\d+)$/);
+    
+    if (matchNumFirst) {
+        numberPart = matchNumFirst[1];
+        lettersPart = matchNumFirst[2];
+    } else if (matchLetFirst) {
+        lettersPart = matchLetFirst[1];
+        numberPart = matchLetFirst[2];
+    } else {
+        setStatus("Invalid format. Use Number+Letters (e.g., 237NW) or Letters+Number (e.g., A1).", true);
         return;
     }
 
-    const numberPart = match[1];
-    const lettersPart = match[2];
     const paddedNumber = numberPart.padStart(4, '0');
     
     // Prefix: "NW-0237"
@@ -160,27 +170,71 @@ function createGatedContent(filename) {
     if (!match) return; 
     
     const ruleString = match[1]; 
+    const ruleUpper = ruleString.toUpperCase();
     
+    // Determine if MORE is involved
+    const hasMore = /\bMORE\b/.test(ruleUpper);
+    
+    // Strip MORE (and surrounding AND/OR) to get the pure letter requirement
+    const letterRule = ruleString
+        .replace(/-AND-MORE|MORE-AND-|-OR-MORE|MORE-OR-|MORE/gi, '')
+        .trim();
+    
+    const hasLetterReq = letterRule.length > 0;
+
     const container = document.createElement('div');
     container.className = "gated-container";
+    
+    // If this MORE file was already revealed, show it immediately
+    if (hasMore && revealedMore.has(filename)) {
+        // Still need to check letter requirements
+        if (hasLetterReq && !checkRequirement(letterRule)) {
+            // Letters no longer met (e.g. player removed a letter) — show as gated
+        } else {
+            const img = document.createElement('img');
+            img.src = `${currentCase}/${filename}`;
+            img.className = "revealed-img";
+            container.appendChild(img);
+            imageArea.appendChild(container);
+            return;
+        }
+    }
     
     const btn = document.createElement('button');
     btn.className = "gate-btn";
     
-    const readableRule = ruleString.replace(/-/g, ' '); 
-    btn.textContent = `Open Clue (Requires: ${readableRule})`;
+    if (hasMore && !hasLetterReq) {
+        // Pure MORE — just a "read on" button
+        btn.textContent = "Read on...";
+    } else if (hasMore && hasLetterReq) {
+        // Combined: letter requirement + MORE
+        const readableRule = formatRule(letterRule);
+        btn.textContent = `Read on... (Requires: ${readableRule})`;
+    } else {
+        // Standard gated content, no MORE
+        const readableRule = formatRule(ruleString);
+        btn.textContent = `Open Clue (Requires: ${readableRule})`;
+    }
 
     btn.onclick = () => {
-        if (checkRequirement(ruleString)) {
-            container.innerHTML = ""; 
-            
-            const img = document.createElement('img');
-            img.src = `${currentCase}/${filename}`;
-            img.className = "revealed-img"; 
-            
-            container.appendChild(img);
-        } else {
+        // Check letter requirements if any
+        if (hasLetterReq && !checkRequirement(letterRule)) {
+            const readableRule = formatRule(letterRule);
             alert(`You do not have the required evidence: ${readableRule}`);
+            return;
+        }
+        
+        // Reveal the image
+        container.innerHTML = ""; 
+        const img = document.createElement('img');
+        img.src = `${currentCase}/${filename}`;
+        img.className = "revealed-img"; 
+        container.appendChild(img);
+        
+        // Track MORE reveals for persistence
+        if (hasMore) {
+            revealedMore.add(filename);
+            saveGameState();
         }
     };
 
@@ -188,20 +242,60 @@ function createGatedContent(filename) {
     imageArea.appendChild(container);
 }
 
+function formatRule(ruleString) {
+    return ruleString
+        .replace(/__/g, (match, offset, string) => {
+            const preceding = string.substring(0, offset);
+            const count = (preceding.match(/__/g) || []).length;
+            return count % 2 === 0 ? '(' : ')';
+        })
+        .replace(/-/g, ' ');
+}
+
 function checkRequirement(ruleString) {
     const rule = ruleString.toUpperCase();
 
-    if (rule.includes('-OR-') || rule.includes(' OR ')) {
-        const parts = rule.split(/-OR-| OR /);
-        return parts.some(letter => collectedLetters.has(letter.trim()));
+    // Recursively resolve grouped sub-expressions marked by __...__
+    function resolveGroups(expr) {
+        // Replace innermost groups first (no nested __ inside)
+        while (expr.includes('__')) {
+            expr = expr.replace(/__([^_]+?)__/g, (match, inner) => {
+                return evaluateExpr(inner) ? 'TRUE' : 'FALSE';
+            });
+        }
+        return evaluateExpr(expr);
     }
-    
-    if (rule.includes('-AND-') || rule.includes(' AND ')) {
-        const parts = rule.split(/-AND-| AND /);
-        return parts.every(letter => collectedLetters.has(letter.trim()));
+
+    // Evaluate a flat expression (no groups remaining) — split by OR, then AND
+    function evaluateExpr(expr) {
+        // Split on OR first (lower precedence)
+        if (expr.includes('-OR-') || expr.includes(' OR ')) {
+            const parts = expr.split(/-OR-| OR /);
+            return parts.some(part => evaluateExpr(part.trim()));
+        }
+
+        // Then AND (higher precedence)
+        if (expr.includes('-AND-') || expr.includes(' AND ')) {
+            const parts = expr.split(/-AND-| AND /);
+            return parts.every(part => evaluateExpr(part.trim()));
+        }
+
+        // Single token
+        return evalToken(expr.trim());
     }
-    
-    return collectedLetters.has(rule);
+
+    // Evaluate a single token: TRUE/FALSE literals, NOT-X, or plain letter
+    function evalToken(token) {
+        if (token === 'TRUE') return true;
+        if (token === 'FALSE') return false;
+        if (token.startsWith('NOT-')) {
+            const letter = token.substring(4);
+            return !collectedLetters.has(letter);
+        }
+        return collectedLetters.has(token);
+    }
+
+    return resolveGroups(rule);
 }
 
 // --- STANDARD FUNCTIONS ---
@@ -211,6 +305,7 @@ function handleAddLetter() {
     if (letter && /^[A-Z]$/.test(letter)) {
         if (!collectedLetters.has(letter)) {
             collectedLetters.add(letter);
+            removedLetters.delete(letter); // Clear from removed if re-adding
             updateLettersList();
             setStatus(`Added letter: ${letter}`);
             saveGameState(); 
@@ -316,21 +411,42 @@ function updateFailCount() {
 
 function updateLettersList() {
     lettersList.innerHTML = "";
-    const sorted = Array.from(collectedLetters).sort();
+    
+    // Combine both sets and sort all letters together
+    const allLetters = new Set([...collectedLetters, ...removedLetters]);
+    const sorted = Array.from(allLetters).sort();
+    
     sorted.forEach(char => {
         const badge = document.createElement('div');
-        badge.className = 'letter-badge';
+        const isActive = collectedLetters.has(char);
+        
+        badge.className = isActive ? 'letter-badge' : 'letter-badge letter-removed';
         badge.textContent = char;
-        badge.title = 'Click to remove';
-        badge.style.cursor = 'pointer';
-        badge.onclick = () => {
-            if (confirm(`Remove letter ${char}?`)) {
-                collectedLetters.delete(char);
-                updateLettersList();
-                setStatus(`Removed letter: ${char}`);
-                saveGameState();
-            }
-        };
+        
+        if (isActive) {
+            badge.title = 'Click to cross out';
+            badge.onclick = () => {
+                if (confirm(`Cross out letter ${char}?`)) {
+                    collectedLetters.delete(char);
+                    removedLetters.add(char);
+                    updateLettersList();
+                    setStatus(`Crossed out letter: ${char}`);
+                    saveGameState();
+                }
+            };
+        } else {
+            badge.title = 'Click to restore';
+            badge.onclick = () => {
+                if (confirm(`Restore letter ${char}?`)) {
+                    removedLetters.delete(char);
+                    collectedLetters.add(char);
+                    updateLettersList();
+                    setStatus(`Restored letter: ${char}`);
+                    saveGameState();
+                }
+            };
+        }
+        
         lettersList.appendChild(badge);
     });
 }
@@ -346,9 +462,11 @@ function saveGameState() {
         case: currentCase,
         leads: Array.from(foundLeads),
         letters: Array.from(collectedLetters),
+        removedLetters: Array.from(removedLetters),
         images: currentDisplayedImages,
         reqs: leadRequirements,
-        fails: Array.from(failedVisits)
+        fails: Array.from(failedVisits),
+        moreRevealed: Array.from(revealedMore)
     };
     localStorage.setItem('detectiveSaveData', JSON.stringify(state));
 }
@@ -365,8 +483,10 @@ function loadGameState() {
     }
     if (state.leads) foundLeads = new Set(state.leads);
     if (state.letters) collectedLetters = new Set(state.letters);
+    if (state.removedLetters) removedLetters = new Set(state.removedLetters);
     if (state.reqs) leadRequirements = state.reqs; 
     if (state.fails) failedVisits = new Set(state.fails);
+    if (state.moreRevealed) revealedMore = new Set(state.moreRevealed);
 
     if (state.images && state.images.length > 0) {
         displayImages(state.images);
