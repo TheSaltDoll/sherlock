@@ -144,6 +144,29 @@ function handleSearch() {
     }
 }
 
+// Preload an image fully before inserting into the DOM
+function preloadAndInsert(src, alt, className, parent) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'image-loading';
+    placeholder.textContent = 'Loading...';
+    parent.appendChild(placeholder);
+
+    const loader = new Image();
+    loader.onload = () => {
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = alt || '';
+        img.loading = 'eager';
+        if (className) img.className = className;
+        parent.replaceChild(img, placeholder);
+    };
+    loader.onerror = () => {
+        placeholder.textContent = 'Failed to load image.';
+        placeholder.className = 'image-error';
+    };
+    loader.src = src;
+}
+
 function displayImages(filenames) {
     imageArea.innerHTML = ""; 
     currentDisplayedImages = filenames; 
@@ -156,10 +179,7 @@ function displayImages(filenames) {
             createGatedContent(file);
         } else {
             // Normal Image (includes 'a', 'b', 'c' files)
-            const img = document.createElement('img');
-            img.src = `${currentCase}/${file}`;
-            img.alt = file;
-            imageArea.appendChild(img);
+            preloadAndInsert(`${currentCase}/${file}`, file, null, imageArea);
         }
     });
 }
@@ -191,10 +211,7 @@ function createGatedContent(filename) {
         if (hasLetterReq && !checkRequirement(letterRule)) {
             // Letters no longer met (e.g. player removed a letter) — show as gated
         } else {
-            const img = document.createElement('img');
-            img.src = `${currentCase}/${filename}`;
-            img.className = "revealed-img";
-            container.appendChild(img);
+            preloadAndInsert(`${currentCase}/${filename}`, filename, 'revealed-img', container);
             imageArea.appendChild(container);
             return;
         }
@@ -226,10 +243,7 @@ function createGatedContent(filename) {
         
         // Reveal the image
         container.innerHTML = ""; 
-        const img = document.createElement('img');
-        img.src = `${currentCase}/${filename}`;
-        img.className = "revealed-img"; 
-        container.appendChild(img);
+        preloadAndInsert(`${currentCase}/${filename}`, filename, 'revealed-img', container);
         
         // Track MORE reveals for persistence
         if (hasMore) {

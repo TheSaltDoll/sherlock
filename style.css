@@ -172,6 +172,27 @@ button:hover { background: #e5b742; }
 
 .placeholder-text { color: #555; margin-top: 50px; font-size: 1.2em; font-style: italic; }
 
+/* Image loading states */
+.image-loading {
+    width: 100%;
+    max-width: 900px;
+    padding: 40px;
+    margin: 0 auto 30px;
+    color: var(--accent-color);
+    font-style: italic;
+    border: 2px dashed #444;
+    text-align: center;
+}
+.image-error {
+    width: 100%;
+    max-width: 900px;
+    padding: 40px;
+    margin: 0 auto 30px;
+    color: #ff6b6b;
+    border: 2px dashed #ff6b6b;
+    text-align: center;
+}
+
 /* --- GATED CONTENT --- */
 .gated-container {
     margin-bottom: 30px;
